@@ -61,12 +61,12 @@ data GameStatus = Game
 initialState :: GameStatus
 initialState = Game
   { ballLoc = (0, -100)
-  , ballVel = (7, -80)
+  , ballVel = (25, -150)
   , playerLoc = 0
   , playerVel = 0
   , isPaused = False
   , blocks = foldl (\x y -> x ++ [Block
-    { blockPos = (-200 + (fromIntegral (mod (truncate y) 15)) * 30, 100 - (fromIntegral (truncate (y / 15))) * 40)
+    { blockPos = (-180 + (fromIntegral (mod (truncate y) 15)) * 25, 100 - (fromIntegral (truncate (y / 15))) * 40)
     , blockCol = orange
     }]) [] [0..59]
   }
@@ -180,30 +180,26 @@ blockCollision game =
       (xball, yball) = ballLoc game 
       radius = 5
       in if 
-        (xblock + 10 <= xball - radius &&
+        ((xblock + 9 < xball - radius && xblock + 11 > xball - radius) ||
+        (xblock - 9 > xball + radius && xblock - 11 < xball + radius)) &&
         yblock + 5 >= yball - radius &&
-        yblock - 5 <= yball + radius) ||
-        (xblock - 10 >= xball + radius &&
-        yblock + 5 >= yball - radius &&
-        yblock - 5 <= yball + radius)
+        yblock - 5 <= yball + radius
       then (-fst acc, snd acc) else
         if 
-          (yblock + 5 <= yball - radius &&
+          (yblock + 6 > yball - radius && yblock + 4 < yball - radius ||
+          (yblock - 6 < yball + radius && yblock - 4 > yball + radius)) &&
           xblock + 10 >= xball - radius &&
-          xblock - 10 <= xball + radius) ||
-          (yblock - 5 >= yball + radius &&
-          xblock + 10 >= xball - radius &&
-          xblock - 10 <= xball + radius)
+          xblock - 10 <= xball + radius
         then (fst acc, -snd acc) else acc) (ballVel game) (blocks game)
     , blocks = foldl (\x y -> let 
       (xblock, yblock) = blockPos y
       (xball, yball) = ballLoc game 
       radius = 5
       in if (
-        xblock + 10 >= xball - radius &&
-        xblock - 10 <= xball + radius &&
-        yblock + 5 >= yball - radius &&
-        yblock - 5 <= yball + radius) 
+        xblock + 11 >= xball - radius &&
+        xblock - 11 <= xball + radius &&
+        yblock + 6 >= yball - radius &&
+        yblock - 6 <= yball + radius) 
         then x else x ++ [y]
 
     ) [] (blocks game)
@@ -212,19 +208,33 @@ blockCollision game =
 -- | Detect collision with a paddle. Upon collision,
 -- change the velocity of the ball to bounce it off.
 paddleBounce :: GameStatus -> GameStatus
-paddleBounce game = game { ballVel = (vx, vy') }
+paddleBounce game = game { ballVel = (vx', vy') }
   where
     -- Radius.
     radius = 5
 
-    -- The old velocity
+    -- The old velocity.
     (vx, vy) = ballVel game
+
+    -- The old location.
+    (ballLocX, _) = ballLoc game
+
+    -- Player location.
+    playerLocX = playerLoc game
+
+    playerV = playerVel game
 
     vy' = if paddleCollision game (ballLoc game) radius
           then
             -vy
           else
             vy
+
+    vx' = if paddleCollision game (ballLoc game) radius
+          then
+            vx + ((ballLocX - playerLocX) * (vx / (sqrt ((vx^2) + (vy^2))))) * playerV * 0.1
+          else
+            vx
 
 -- | Detect collision with  wall. Upon collision,
 -- update velocity of the ball to bounce it off.
@@ -262,13 +272,13 @@ handleKeys (EventKey (Char 'r') Down _ _) game = initialState
 -- For 'p' keypress, game is paused/unpaused.
 handleKeys (EventKey (Char 'p') Down _ _) game = game { isPaused = not $ isPaused game }
 -- For '<-' keypress, move paddle to left.
-handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) game = game { playerVel = playerVel game - 50 }
+handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) game = game { playerVel = playerVel game - 150 }
 -- For '<-' release, stop the paddle.
-handleKeys (EventKey (SpecialKey KeyLeft) Up _ _) game = game { playerVel = playerVel game + 50 }
+handleKeys (EventKey (SpecialKey KeyLeft) Up _ _) game = game { playerVel = playerVel game + 150 }
 -- For '->' keypress, move paddle to left.
-handleKeys (EventKey (SpecialKey KeyRight) Down _ _) game = game { playerVel = playerVel game + 50 }
+handleKeys (EventKey (SpecialKey KeyRight) Down _ _) game = game { playerVel = playerVel game + 150 }
 -- For '->' release, stop the paddle.
-handleKeys (EventKey (SpecialKey KeyRight) Up _ _) game = game { playerVel = playerVel game - 50 }
+handleKeys (EventKey (SpecialKey KeyRight) Up _ _) game = game { playerVel = playerVel game - 150 }
 -- All other inputs are ignored.
 handleKeys _ game = game
 
