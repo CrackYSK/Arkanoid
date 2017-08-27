@@ -53,8 +53,10 @@ data GameStatus = Game
   , ballVel :: Position -- ^ (x, y) ball velocity.
   , playerLoc :: Float -- ^ Player x position.
   , playerVel :: Float -- ^ Player x velocity.
+  , playerAcc :: Float -- ^ Player acceleration.
   , isPaused :: Bool -- ^ Pause indicator.
   , blocks :: Blocks -- ^ Blocks currently on screen.
+  , gameStat :: Int -- ^ Game status indicator. 0 - still playing, 1 - won, -1 - lost.
   }
 
 -- | Starting state of the game.
@@ -64,18 +66,24 @@ initialState = Game
   , ballVel = (25, -150)
   , playerLoc = 0
   , playerVel = 0
-  , isPaused = False
+  , playerAcc = 150
+  , isPaused = True
   , blocks = foldl (\x y -> x ++ [Block
-    { blockPos = (-180 + (fromIntegral (mod (truncate y) 15)) * 25, 100 - (fromIntegral (truncate (y / 15))) * 40)
+    { blockPos = (-200 + (fromIntegral (mod (truncate y) 15)) * 30, 100 - (fromIntegral (truncate (y / 15))) * 40)
     , blockCol = orange
     }]) [] [0..59]
+  , gameStat = 0
   }
 
 -- | Convert state into a picture.
 render :: GameStatus -- ^ State that is being redered.
        -> Picture  -- ^ Picture that represents game state.
 render game =
-  pictures [ball, walls, mkPlayer, drawBlocks]
+  if gameStat game == 0 
+    then pictures [ball, walls, mkPlayer, drawBlocks] 
+    else if gameStat game == -1 
+      then (pictures [translate (-300) 0 (color red (text "You lost!")), (translate (-250) (-150) (scale 0.3 1 (color blue (text "Press 'r' for new game!"))))]) 
+      else (pictures [translate (-300) 0 (color red (text "You won!")), (translate (-250) (-150) (scale 0.3 1 (color blue (text "Press 'r' for new game!"))))])
   where
       -- Ball.
       ball = uncurry translate (ballLoc game) $ color ballColor $ circleSolid ballSize
@@ -232,7 +240,7 @@ paddleBounce game = game { ballVel = (vx', vy') }
 
     vx' = if paddleCollision game (ballLoc game) radius
           then
-            vx + ((ballLocX - playerLocX) * (vx / (sqrt ((vx^2) + (vy^2))))) * playerV * 0.1
+            vx + vx * (vx / (sqrt ((vx^2) + (vy^2)))) + playerV * 0.3
           else
             vx
 
@@ -272,13 +280,27 @@ handleKeys (EventKey (Char 'r') Down _ _) game = initialState
 -- For 'p' keypress, game is paused/unpaused.
 handleKeys (EventKey (Char 'p') Down _ _) game = game { isPaused = not $ isPaused game }
 -- For '<-' keypress, move paddle to left.
-handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) game = game { playerVel = playerVel game - 150 }
+handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) game = game { playerVel = playerVel game - playerAcc game }
 -- For '<-' release, stop the paddle.
-handleKeys (EventKey (SpecialKey KeyLeft) Up _ _) game = game { playerVel = playerVel game + 150 }
+handleKeys (EventKey (SpecialKey KeyLeft) Up _ _) game = game { playerVel = playerVel game + playerAcc game }
 -- For '->' keypress, move paddle to left.
-handleKeys (EventKey (SpecialKey KeyRight) Down _ _) game = game { playerVel = playerVel game + 150 }
+handleKeys (EventKey (SpecialKey KeyRight) Down _ _) game = game { playerVel = playerVel game + playerAcc game }
 -- For '->' release, stop the paddle.
-handleKeys (EventKey (SpecialKey KeyRight) Up _ _) game = game { playerVel = playerVel game - 150 }
+handleKeys (EventKey (SpecialKey KeyRight) Up _ _) game = game { playerVel = playerVel game - playerAcc game }
+-- For '+' keypress, increase playerAcc and y component of ballVel by 10.
+handleKeys (EventKey (SpecialKey KeyUp) Down _ _) game = game { playerAcc = playerAcc game + 10
+                                                              , ballVel = (vx, vy')
+                                                              }
+                                                              where
+                                                                (vx, vy) = ballVel game
+                                                                vy' = if vy > 0 then vy + 2 else vy - 2
+-- For '-' kreypress, decrease playerAcc and y component of ballVel by 10.
+handleKeys (EventKey (SpecialKey KeyDown) Down _ _) game = game { playerAcc = playerAcc game - 10
+                                                                , ballVel = (vx, vy')
+                                                                }
+                                                                where
+                                                                  (vx, vy) = ballVel game
+                                                                  vy' = if vy > 0 then vy - 2 else vy + 2
 -- All other inputs are ignored.
 handleKeys _ game = game
 
@@ -287,9 +309,12 @@ update :: Float -> GameStatus -> GameStatus
 update seconds game = if isPaused game
                       then
                         game
+                      else if null (blocks game)
+                      then
+                        game { gameStat = 1}
                       else if y < -(fromIntegral height / 2 - 5)
                         then
-                          error "You lose!"
+                          game { gameStat = -1}
                         else
                           paddleBounce . blockCollision $ wallBounce $ movePaddle seconds $ moveBall seconds game
                       where
