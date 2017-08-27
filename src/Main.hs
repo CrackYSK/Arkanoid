@@ -2,7 +2,6 @@
 module Main where
 
 import Graphics.Gloss
-import Graphics.Gloss.Data.ViewPort
 import Graphics.Gloss.Interface.Pure.Game
 
 -- | Screen width.
@@ -35,6 +34,19 @@ type Radius = Float
 -- | Ball position alias.
 type Position = (Float, Float)
 
+-- | Block information.
+data BlockInfo = Block
+  { blockPos :: Position -- ^ (x, y) block location.
+  , blockCol :: Color -- ^ Block color.
+  }
+
+-- | Size of blocks.
+blockSize :: (Float, Float)
+blockSize = (20, 10)
+
+-- | List of blocks.
+type Blocks = [BlockInfo]
+
 -- | Game status.
 data GameStatus = Game
   { ballLoc :: Position -- ^ (x, y) ball location.
@@ -42,23 +54,28 @@ data GameStatus = Game
   , playerLoc :: Float -- ^ Player x position.
   , playerVel :: Float -- ^ Player x velocity.
   , isPaused :: Bool -- ^ Pause indicator.
-  } deriving Show
+  , blocks :: Blocks -- ^ Blocks currently on screen.
+  }
 
 -- | Starting state of the game.
 initialState :: GameStatus
 initialState = Game
-  { ballLoc = (0, 0)
-  , ballVel = (7, -60)
+  { ballLoc = (0, -100)
+  , ballVel = (7, -80)
   , playerLoc = 0
   , playerVel = 0
   , isPaused = False
+  , blocks = foldl (\x y -> x ++ [Block
+    { blockPos = (-200 + (fromIntegral (mod (truncate y) 15)) * 30, 100 - (fromIntegral (truncate (y / 15))) * 40)
+    , blockCol = orange
+    }]) [] [0..59]
   }
 
 -- | Convert state into a picture.
 render :: GameStatus -- ^ State that is being redered.
        -> Picture  -- ^ Picture that represents game state.
 render game =
-  pictures [ball, walls, mkPlayer]
+  pictures [ball, walls, mkPlayer, drawBlocks]
   where
       -- Ball.
       ball = uncurry translate (ballLoc game) $ color ballColor $ circleSolid ballSize
@@ -75,6 +92,11 @@ render game =
       -- Player paddle.
       mkPlayer = translate (playerLoc game) (-250) $ color playerColor $ rectangleSolid 50 10
       playerColor = light $ light blue
+
+      -- Blocks.
+      drawBlocks = pictures $ foldl (\x y -> x ++ [uncurry translate (blockPos y) (color (blockCol y) (uncurry rectangleSolid blockSize))]) [] (blocks game)
+
+
 
 -- | Update the ball position.
 moveBall :: Float -- ^ Number of seconds since last update
@@ -141,13 +163,51 @@ wallCollision (x, y) radius = topCollision || leftCollision || rightCollision
 
 -- | Given position and radius of the ball, return whether
 -- a collision with paddle occured.
-paddleCollision :: GameStatus -> Position -> Radius ->Bool
+paddleCollision :: GameStatus -> Position -> Radius -> Bool
 paddleCollision game (x, y) radius =
-                                y - 2 * radius == -250
+                                y - radius <= -250
                                 && x >= paddlePosition - 25
                                 && x <= paddlePosition + 25
                               where
                                 paddlePosition = playerLoc game
+
+-- | Change velocity of the ball and destroy hit block.
+blockCollision :: GameStatus -> GameStatus
+blockCollision game = 
+   game {
+    ballVel = foldl (\acc y -> let 
+      (xblock, yblock) = blockPos y
+      (xball, yball) = ballLoc game 
+      radius = 5
+      in if 
+        (xblock + 10 <= xball - radius &&
+        yblock + 5 >= yball - radius &&
+        yblock - 5 <= yball + radius) ||
+        (xblock - 10 >= xball + radius &&
+        yblock + 5 >= yball - radius &&
+        yblock - 5 <= yball + radius)
+      then (-fst acc, snd acc) else
+        if 
+          (yblock + 5 <= yball - radius &&
+          xblock + 10 >= xball - radius &&
+          xblock - 10 <= xball + radius) ||
+          (yblock - 5 >= yball + radius &&
+          xblock + 10 >= xball - radius &&
+          xblock - 10 <= xball + radius)
+        then (fst acc, -snd acc) else acc) (ballVel game) (blocks game)
+    , blocks = foldl (\x y -> let 
+      (xblock, yblock) = blockPos y
+      (xball, yball) = ballLoc game 
+      radius = 5
+      in if (
+        xblock + 10 >= xball - radius &&
+        xblock - 10 <= xball + radius &&
+        yblock + 5 >= yball - radius &&
+        yblock - 5 <= yball + radius) 
+        then x else x ++ [y]
+
+    ) [] (blocks game)
+  }
 
 -- | Detect collision with a paddle. Upon collision,
 -- change the velocity of the ball to bounce it off.
@@ -221,7 +281,7 @@ update seconds game = if isPaused game
                         then
                           error "You lose!"
                         else
-                          paddleBounce . wallBounce $ movePaddle seconds $ moveBall seconds game
+                          paddleBounce . blockCollision $ wallBounce $ movePaddle seconds $ moveBall seconds game
                       where
                         (_, y) = ballLoc game
 
