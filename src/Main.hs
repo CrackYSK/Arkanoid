@@ -301,22 +301,22 @@ handleKeys :: Event -- ^ Event to handle.
 handleKeys (EventKey (Char 'r') Down _ _) game = initialState
 -- For 'p' keypress, game is paused/unpaused.
 handleKeys (EventKey (Char 'p') Down _ _) game = game { isPaused = not $ isPaused game }
--- For '<-' keypress, move paddle to left.
+-- For '←' keypress, move paddle to left.
 handleKeys (EventKey (SpecialKey KeyLeft) Down _ _) game = game { playerVel = playerVel game - playerAcc game }
--- For '<-' release, stop the paddle.
+-- For '←' release, stop the paddle.
 handleKeys (EventKey (SpecialKey KeyLeft) Up _ _) game = game { playerVel = playerVel game + playerAcc game }
--- For '->' keypress, move paddle to left.
+-- For '→' keypress, move paddle to left.
 handleKeys (EventKey (SpecialKey KeyRight) Down _ _) game = game { playerVel = playerVel game + playerAcc game }
--- For '->' release, stop the paddle.
+-- For '→' release, stop the paddle.
 handleKeys (EventKey (SpecialKey KeyRight) Up _ _) game = game { playerVel = playerVel game - playerAcc game }
--- For '+' keypress, increase playerAcc and y component of ballVel by 10.
+-- For '↑' keypress, increase playerAcc and y component of ballVel by 10.
 handleKeys (EventKey (SpecialKey KeyUp) Down _ _) game = game { playerAcc = playerAcc game + 10
                                                               , ballVel = (vx, vy')
                                                               }
                                                               where
                                                                 (vx, vy) = ballVel game
                                                                 vy' = if vy > 0 then vy + 2 else vy - 2
--- For '-' kreypress, decrease playerAcc and y component of ballVel by 10.
+-- For '↓' kreypress, decrease playerAcc and y component of ballVel by 10.
 handleKeys (EventKey (SpecialKey KeyDown) Down _ _) game = game { playerAcc = playerAcc game - 10
                                                                 , ballVel = (vx, vy')
                                                                 }
